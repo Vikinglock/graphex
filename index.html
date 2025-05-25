@@ -1,0 +1,657 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>thing</title>
+<!--
+    "graphex" by vikinglock
+    all rights reserved
+
+
+
+
+    see it's a play on words because like there's a lot of hex numbers involved and it's like similar to the word "graphics"
+-->
+<style>
+    body {
+        margin: 0;
+        background-color: black;
+    }
+    canvas {
+        margin: 0;
+        image-rendering: pixelated;
+        width: 640px;
+        height: 480px;
+    }
+    #memout {
+        position: absolute;
+        margin: 0;
+        top: 0;
+        left: 640px;
+        width: 512px;
+        height: 620px;
+        max-height: 620px;
+        border: 1px solid #fff;
+        color: #fff;
+        overflow-y: scroll;
+    }
+    #output {
+        position: absolute;
+        margin: 0;
+        top: 480px;
+        width: 638px;
+        height: 140px;
+        max-height: 140px;
+        border: 1px solid #fff;
+        color: #fff;
+        overflow-y: scroll;
+    }
+</style></head><body><canvas id="canvas" width="128" height="96"></canvas><pre id="output"></pre><pre id="memout"></pre><script>
+        const width = 128, height = 96;
+        const mem = new Uint8Array(512).fill(0x00);
+        const vrm = new Uint8Array(width*height*4).fill(0x00);
+        const canvas = document.getElementById('canvas');
+        const outputSqr = document.getElementById('output');
+        const memoutSqr = document.getElementById('memout');
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(width, height);
+
+        //Uint8Array
+
+        // "funny asm" by me
+        //
+        // basically x64 asm but to access vram you do {} instead of whatever it is normally
+        //
+        // there is a 3
+        // ^^^ what was i trying to say
+        //
+        // instructions:
+        // mov jmp
+        // je jne
+        // jg jl
+        // jge jl
+        // cmp inc dec add sub imul
+        // registers:
+        // eax ebx ecx edx
+        //
+        // mov [0x00],eax ; moves eax to 0x00 in memory
+
+        // mov eax,4 ; makes eax 4 for printing
+        // mov ebx,1 ; moves 1 into eax for some reason
+        // mov ecx,"aa" ; moves "aa" (utf-8 i presume) into ecx (actually no it doesn't as string literals do not exist)
+        // mov edx,2 ; moves 2 (length) into edx
+        // int 0x80 ; call kernel
+
+        //draw
+        //eax x
+        //ebx y
+        //ecx index
+        //edx color maybe
+
+        //code
+        let asm = `
+        org 0x30
+
+        db 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42
+        db 0x78, 0x44, 0x44, 0x78, 0x44, 0x44, 0x44, 0x78
+        db 0x3c, 0x42, 0x40, 0x40, 0x40, 0x40, 0x42, 0x3c
+        db 0x78, 0x44, 0x42, 0x42, 0x42, 0x42, 0x44, 0x78
+        db 0x7e, 0x40, 0x40, 0x7c, 0x40, 0x40, 0x40, 0x7e
+        db 0x7e, 0x40, 0x40, 0x7c, 0x40, 0x40, 0x40, 0x40
+        db 0x3c, 0x42, 0x40, 0x40, 0x46, 0x42, 0x42, 0x3c
+        db 0x42, 0x42, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42
+        db 0x7e, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x7e
+        db 0x1c, 0x04, 0x04, 0x04, 0x04, 0x04, 0x44, 0x38
+        db 0x44, 0x48, 0x50, 0x60, 0x60, 0x50, 0x48, 0x44
+        db 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7e
+        db 0x42, 0x66, 0x5a, 0x42, 0x42, 0x42, 0x42, 0x42
+        db 0x42, 0x62, 0x52, 0x4a, 0x46, 0x42, 0x42, 0x42
+        db 0x3c, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3c
+        db 0x7c, 0x42, 0x42, 0x42, 0x7c, 0x40, 0x40, 0x40
+        db 0x3c, 0x42, 0x42, 0x42, 0x42, 0x42, 0x44, 0x3a
+        db 0x7c, 0x42, 0x42, 0x7c, 0x50, 0x48, 0x44, 0x42
+        db 0x3e, 0x40, 0x40, 0x3c, 0x02, 0x02, 0x02, 0x7c
+        db 0xfe, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10
+        db 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3c
+        db 0x42, 0x42, 0x42, 0x42, 0x24, 0x24, 0x24, 0x18
+        db 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x5a, 0x24
+        db 0x42, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x42
+        db 0x82, 0x44, 0x28, 0x10, 0x10, 0x10, 0x10, 0x10
+        db 0x7e, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x7e
+
+		mov eax, 0x00
+        mov ebx, 0x00
+        mov ecx, 0x00
+        mov edx, 0
+
+        jmp start
+        
+        ; draw
+        ; eax - x
+        ; ebx - y
+        ; ecx - character
+        ; edx idk
+
+        draw:
+            mov [0x01], 0x07
+        	mov edx, 0x00
+            imul ebx, 0x1602
+            imul ecx, 0x08
+            add ecx, 0x30
+            imul [0x02], eax, 0x20 ; (add dword for imul to fix bug)
+            yloop:
+                xloop:
+                    add ebx, [0x02]
+                    bt [ecx], [0x01] ; not possible in actual assembly apparently
+
+                    jnc elseskip ; pixel checking
+                        mov {ebx}, 0xff ; true, set pixel to white
+                        inc ebx
+                        mov {ebx}, 0xff
+                        inc ebx
+                        mov {ebx}, 0xff
+                        add ebx, 0x02 ; also increment ebx by 4
+
+                    jmp skip
+                    elseskip:
+                        add ebx, 0x04 ; false, increment ebx by 4
+                    skip:
+
+                    sub ebx, [0x02]
+                    
+                    dec [0x01]
+
+                    add [0x00], 0x01
+                    cmp [0x00], 0x08
+
+                jl xloop
+
+                add ebx, 0x1E0
+                mov [0x01], 0x07
+                mov [0x00], 0x00
+
+                inc ecx
+                inc edx
+                cmp edx, 0x08
+            jl yloop
+        ret
+
+
+        start:
+        
+            mov eax, 0x00
+            mov ebx, 0x02
+            mov ecx, 19
+            call draw
+            mov eax, 0x01
+            mov ebx, 0x02
+            mov ecx, 7
+            call draw
+            mov eax, 0x02
+            mov ebx, 0x02
+            mov ecx, 0
+            call draw
+            mov eax, 0x03
+            mov ebx, 0x02
+            mov ecx, 19
+            call draw
+            mov eax, 0x04
+            mov ebx, 0x02
+            mov ecx, 18
+            call draw
+
+            mov eax, 0x00
+            mov ebx, 0x03
+            mov ecx, 15
+            call draw
+            mov eax, 0x01
+            mov ebx, 0x03
+            mov ecx, 17
+            call draw
+            mov eax, 0x02
+            mov ebx, 0x03
+            mov ecx, 4
+            call draw
+            mov eax, 0x03
+            mov ebx, 0x03
+            mov ecx, 19
+            call draw
+            mov eax, 0x04
+            mov ebx, 0x03
+            mov ecx, 19
+            call draw
+            mov eax, 0x05
+            mov ebx, 0x03
+            mov ecx, 24
+            call draw
+
+            mov eax, 0x00
+            mov ebx, 0x04
+            mov ecx, 2
+            call draw
+            mov eax, 0x01
+            mov ebx, 0x04
+            mov ecx, 17
+            call draw
+            mov eax, 0x02
+            mov ebx, 0x04
+            mov ecx, 0
+            call draw
+            mov eax, 0x03
+            mov ebx, 0x04
+            mov ecx, 25
+            call draw
+            mov eax, 0x04
+            mov ebx, 0x04
+            mov ecx, 24
+            call draw
+        ;jmp start
+
+        end:
+            org 0x00
+            db "amirite??",10,10,10,10,"brought",32,"to",32,"you",32,"by",32,"meeee",32,"inc."
+            mov eax, 4
+            mov ebx, 4 ; number for decimal
+            mov ecx, 0 ; 0b for binary
+            mov edx, 41 ; 0x for hex
+            int 0x80
+        `;
+
+        let output = "";
+        let eax = 0;
+        let ebx = 0;
+        let ecx = 0;
+        let edx = 0;
+        var ind = 0;
+        let cmpa = 0;
+        let cmpb = 0;
+        let zero = false;
+        let carry = false;
+        let ref = [];
+        let stack = [];
+
+        let wait = true;//because chromebooks are so impossibly ass
+
+        function get(thing,get32 = false){
+            //if [] then it gets memory
+            //if eax ebx etc. it gets them
+            //can't get strings and i now get why they didn't exist in c
+
+            function read32(mem, address) {
+                return (mem[address] | (mem[address+1] << 8) | (mem[address+2] << 16) | (mem[address+3] << 24)) >>> 0;
+            }
+
+
+            if(thing.charAt(0) === '['||thing.charAt(thing.length-1) === ']'){
+                var loc = thing.substring(1,thing.length-1);
+
+                if(loc === "eax"){if(get32)return read32(mem,eax);else return mem[eax];}
+                else if(loc === "ebx"){if(get32)return read32(mem,ebx);else return mem[ebx];}
+                else if(loc === "ecx"){if(get32)return read32(mem,ecx);else return mem[ecx];}
+                else if(loc === "edx"){if(get32)return read32(mem,edx);else return mem[edx];}
+                    
+                if(get32)return read32(mem,Number(loc));else return mem[Number(loc)];
+            }else if(thing.charAt(0) === '{'||thing.charAt(thing.length-1) === '}'){
+                var loc = thing.substring(1,thing.length-1);
+
+                if(loc === "eax"){if(get32)return read32(vrm,eax);else return vrm[eax];}
+                else if(loc === "ebx"){if(get32)return read32(vrm,ebx);else return vrm[ebx];}
+                else if(loc === "ecx"){if(get32)return read32(vrm,ecx);else return vrm[ecx];}
+                else if(loc === "edx"){if(get32)return read32(vrm,edx);else return vrm[edx];}
+                    
+                if(get32)return read32(vrm,Number(loc));else return vrm[Number(loc)];
+            }else if(thing === "eax"){return eax;
+            }else if(thing === "ebx"){return ebx;
+            }else if(thing === "ecx"){return ecx;
+            }else if(thing === "edx"){return edx;
+            }
+
+            if(thing in ref)return ref[thing];
+
+            return Number(thing);
+        }
+
+        function display(){
+            outputSqr.innerHTML = output;
+            for(var i = 0; i < width*height; i++){
+                imageData.data[(i*4)] = vrm[(i*4)];
+                imageData.data[(i*4)+1] = vrm[(i*4)+1];
+                imageData.data[(i*4)+2] = vrm[(i*4)+2];
+                imageData.data[(i*4)+3] = 0xff;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+
+            var memout = "";
+            for(var i = 0; i < mem.length; i++){
+                memout += "0x"+((mem[i]>15)?"":"0")+mem[i].toString(16)+" ";
+                if(i%8==7)memout += "\n"
+            }
+
+            memoutSqr.innerHTML = memout;
+        }
+
+        async function main(){
+
+            var instructions = asm.split(`
+        `);
+            
+            //linker probably
+            //making map to section data
+            for(var address = 0; address < instructions.length; address++){
+                var proc = instructions[address].split(";")[0].trim().split(/,\s*|\s+/);
+                if(proc[0].substring(proc[0].length-1) === ":"){
+                    ref[proc[0].substring(0,proc[0].length-1)] = address;
+                }
+            }
+
+
+            //output += ref;
+
+            for(var address = 0; address < instructions.length; address++){
+                var proc = instructions[address].split(";")[0].trim().split(/,\s*|\s+/);
+                var sec = 2;
+                var dwrd = false;
+                if(proc[2] == "dword"|| proc[4] == "dword"){
+                    sec++;
+                    dwrd = true;
+                }
+                switch(proc[0]){
+                    case "mov":
+                        switch(proc[1]){
+                            case "eax":eax = get(proc[sec],dwrd);break;
+                            case "ebx":ebx = get(proc[sec],dwrd);break;
+                            case "ecx":ecx = get(proc[sec],dwrd);break;
+                            case "edx":edx = get(proc[sec],dwrd);break;
+                            default:
+                                if(proc[1].charAt(0) === "["){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax")mem[eax] = get(proc[sec],dwrd);
+                                    else if(loc === "ebx")mem[ebx] = get(proc[sec],dwrd);
+                                    else if(loc === "ecx")mem[ecx] = get(proc[sec],dwrd);
+                                    else if(loc === "edx")mem[edx] = get(proc[sec],dwrd);
+                                    else mem[Number(loc)] = get(proc[sec],dwrd);
+                                }else if(proc[1].charAt(0) === "{"){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax")vrm[eax] = get(proc[sec],dwrd);
+                                    else if(loc === "ebx")vrm[ebx] = get(proc[sec],dwrd);
+                                    else if(loc === "ecx")vrm[ecx] = get(proc[sec],dwrd);
+                                    else if(loc === "edx")vrm[edx] = get(proc[sec],dwrd);
+                                    else vrm[Number(loc)] = get(proc[sec],dwrd);
+                                }
+                            break;
+                            case "dword":
+                                function store32(mem, address, value) {
+                                    mem[address]   = (value >> 0) & 0xFF;
+                                    mem[address+1] = (value >> 8) & 0xFF;
+                                    mem[address+2] = (value >> 16) & 0xFF;
+                                    mem[address+3] = (value >> 24) & 0xFF;
+                                }
+                                if(proc[2].charAt(0) === "["){
+                                    var loc = proc[2].substring(1,proc[2].length-1);
+                                    if(loc === "eax")store32(mem,eax,get(proc[3],dwrd));
+                                    else if(loc === "ebx")store32(mem,ebx,get(proc[3],dwrd));
+                                    else if(loc === "ecx")store32(mem,ecx,get(proc[3],dwrd));
+                                    else if(loc === "edx")store32(mem,edx,get(proc[3],dwrd));
+                                    else store32(mem,Number(loc),get(proc[3],dwrd));
+                                }else if(proc[2].charAt(0) === "{"){
+                                    var loc = proc[2].substring(1,proc[2].length-1);
+                                    if(loc === "eax")store32(vrm,eax,get(proc[3],dwrd));
+                                    else if(loc === "ebx")store32(vrm,ebx,get(proc[3],dwrd));
+                                    else if(loc === "ecx")store32(vrm,ecx,get(proc[3],dwrd));
+                                    else if(loc === "edx")store32(vrm,edx,get(proc[3],dwrd));
+                                    else store32(vrm,Number(loc),get(proc[3],dwrd));
+                                }
+                            break;
+                        }
+                    break;
+                    case "jmp":
+                        address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;//you know i probably should just have a jump() function and then run the ifs on those
+                    case "je":
+                        if(cmpa==cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jne":
+                        if(cmpa!=cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jl":
+                        if(cmpa<cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jg":
+                        if(cmpa>cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jle":
+                        if(cmpa<=cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jge":
+                        if(cmpa>=cmpb)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jnz":
+                        if(!zero)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jc":
+                        if(carry)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "jnc":
+                        if(!carry)address = get(proc[1])-1;
+                        display();
+                        if(wait)await new Promise(resolve => setTimeout(resolve, 0));
+                    break;
+                    case "bt":
+                        if(get(proc[1]) & (1 << get(proc[2])))carry = true;
+                        else carry = false;
+                    break;
+                    case "call":
+                        stack.push(address);
+                        address = get(proc[1]);
+                    break;
+                    case "ret":
+                        address = stack[stack.length-1];
+                        stack.pop()
+                    break;
+                    case "cmp":
+                        cmpa = get(proc[1]);
+                        cmpb = get(proc[2]);
+                    break;
+                    case "add":
+                        switch(proc[1]){
+                            case "eax":eax += get(proc[2]);break;
+                            case "ebx":ebx += get(proc[2]);break;
+                            case "ecx":ecx += get(proc[2]);break;
+                            case "edx":edx += get(proc[2]);break;
+                            default:
+                                if(proc[1].charAt(0) === "["){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax")mem[eax] += get(proc[2]);
+                                    else if(loc === "ebx")mem[eax] += get(proc[2]);
+                                    else if(loc === "ecx")mem[eax] += get(proc[2]);
+                                    else if(loc === "edx")mem[eax] += get(proc[2]);
+                                    else mem[Number(loc)] += get(proc[2]);
+                                }
+                            break;
+                        }
+                    break;
+                    case "sub":
+                        switch(proc[1]){
+                            case "eax":eax -= get(proc[2]);break;
+                            case "ebx":ebx -= get(proc[2]);break;
+                            case "ecx":ecx -= get(proc[2]);break;
+                            case "edx":edx -= get(proc[2]);break;
+                            default:
+                                if(proc[1].charAt(0) === "["){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax")mem[eax] -= get(proc[2]);
+                                    else if(loc === "ebx")mem[eax] -= get(proc[2]);
+                                    else if(loc === "ecx")mem[eax] -= get(proc[2]);
+                                    else if(loc === "edx")mem[eax] -= get(proc[2]);
+                                    else mem[Number(loc)] -= get(proc[2]);
+                                }
+                            break;
+                        }
+                    break;
+                    case "inc":
+                        switch(proc[1]){
+                            case "eax":eax++;zero=(eax==0);break;
+                            case "ebx":ebx++;zero=(ebx==0);break;
+                            case "ecx":ecx++;zero=(ecx==0);break;
+                            case "edx":edx++;zero=(edx==0);break;
+                            default:
+                                if(proc[1].charAt(0) === "["){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax"){
+                                        mem[eax]++;
+                                        zero = (mem[eax]==0);
+                                    }else if(loc === "ebx"){
+                                        mem[ebx]++;
+                                        zero = (mem[ebx]==0);
+                                    }else if(loc === "ecx"){
+                                        mem[ecx]++;
+                                        zero = (mem[ecx]==0);
+                                    }else if(loc === "edx"){
+                                        mem[edx]++;
+                                        zero = (mem[edx]==0);
+                                    }else{
+                                        mem[Number(loc)]++;
+                                        zero = (mem[Number(loc)]==0);
+                                    }
+                                }
+                            break;
+                        }
+                    break;
+                    case "dec":
+                        switch(proc[1]){
+                            case "eax":eax--;zero=(eax==0);break;
+                            case "ebx":ebx--;zero=(ebx==0);break;
+                            case "ecx":ecx--;zero=(ecx==0);break;
+                            case "edx":edx--;zero=(edx==0);break;
+                            default:
+                                if(proc[1].charAt(0) === "["){
+                                    var loc = proc[1].substring(1,proc[1].length-1);
+                                    if(loc === "eax"){
+                                        mem[eax]--;
+                                        zero = (mem[eax]==0);
+                                    }else if(loc === "ebx"){
+                                        mem[ebx]--;
+                                        zero = (mem[ebx]==0);
+                                    }else if(loc === "ecx"){
+                                        mem[ecx]--;
+                                        zero = (mem[ecx]==0);
+                                    }else if(loc === "edx"){
+                                        mem[edx]--;
+                                        zero = (mem[edx]==0);
+                                    }else{
+                                        mem[Number(loc)]--;
+                                        zero = (mem[Number(loc)]==0);
+                                    }
+                                }
+                            break;
+                        }
+                    break;
+                    case "imul":
+                        if(proc[3]){
+                            switch(proc[1]){
+                                case "eax":eax = get(proc[2])*get(proc[3]);break;
+                                case "ebx":ebx = get(proc[2])*get(proc[3]);break;
+                                case "ecx":ecx = get(proc[2])*get(proc[3]);break;
+                                case "edx":edx = get(proc[2])*get(proc[3]);break;
+                                default:
+                                    if(proc[1].charAt(0) === "["){
+                                        var loc = proc[1].substring(1,proc[1].length-1);
+                                        if(loc === "eax")mem[eax] = get(proc[2])*get(proc[3]);
+                                        else if(loc === "ebx")mem[eax] = get(proc[2])*get(proc[3]);
+                                        else if(loc === "ecx")mem[eax] = get(proc[2])*get(proc[3]);
+                                        else if(loc === "edx")mem[eax] = get(proc[2])*get(proc[3]);
+                                        else mem[Number(loc)] = get(proc[2])*get(proc[3]);
+                                    }
+                                break;
+                            }
+                        }else{
+                            switch(proc[1]){
+                                case "eax":eax *= get(proc[2]);break;
+                                case "ebx":ebx *= get(proc[2]);break;
+                                case "ecx":ecx *= get(proc[2]);break;
+                                case "edx":edx *= get(proc[2]);break;
+                                default:
+                                    if(proc[1].charAt(0) === "["){
+                                        var loc = proc[1].substring(1,proc[1].length-1);
+                                        if(loc === "eax")mem[eax] *= get(proc[2]);
+                                        else if(loc === "ebx")mem[eax] *= get(proc[2]);
+                                        else if(loc === "ecx")mem[eax] *= get(proc[2]);
+                                        else if(loc === "edx")mem[eax] *= get(proc[2]);
+                                        else mem[Number(loc)] *= get(proc[2]);
+                                    }
+                                break;
+                            }
+                        }
+                    break;
+                    case "int":
+                        if(proc[1] == 0x80){
+                            if(eax == 4){
+                                var written = 0;
+                                for(var i = parseInt(ecx); i < parseInt(ecx)+edx; i++){
+                                    if(i>=mem.length)break;
+                                    output += String.fromCharCode(mem[i]);
+                                    written++;
+                                }
+                                eax = written;
+                            }
+                        }
+                    break;
+                    case "org":
+                        ind = Number(proc[1]);
+                    break;
+                    case "db":
+                        for(var i = 1; i < proc.length; i++){
+                            if(proc[i].charAt(0) === '"'||
+                            proc[i].charAt(proc[i].length-1) === '"'){
+                                for(var j = 1; j < proc[i].length-1; j++){
+                                    mem[ind] = proc[i].charCodeAt(j);
+                                    ind++;
+                                }
+                            }else{
+                                mem[ind] = Number(proc[i]);
+                                ind++;
+                            }
+                        }
+                    break
+                    default:
+                        if(proc[1] == "db"){
+                            for(var i = 2; i < proc.length; i++){
+                                if(proc[i].charAt(0) === '"'||
+                                proc[i].charAt(proc[i].length-1) === '"'){
+                                    for(var j = 1; j < proc[i].length-1; j++){
+                                        mem[ind] = proc[i].charCodeAt(j);
+                                        ind++;
+                                    }
+                                }else{
+                                    mem[ind] = Number(proc[i]);
+                                    ind++;
+                                }
+                            }
+                        }
+                    break;
+                }
+            }
+
+            display();
+        }
+
+        main();
+  </script>
+</body>
+</html>
